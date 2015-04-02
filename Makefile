@@ -10,16 +10,22 @@ boot.bin:	boot.S
 	nasm boot.S -f bin -o boot.bin
 
 # assembly the kernel bootstrap code into elf format
-bootstrap.o:	bootstrap.S
+bootstrap.o:	bootstrap.S isr.S
 	i686-elf-gcc -c  bootstrap.S  -o bootstrap.o
 
 # compile the C kernel code into elf format
 kernel.o:	kernel.c
 	i686-elf-gcc -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
 
+isr.o:	isr.c
+	i686-elf-gcc -c isr.c -o isr.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+
+vgaconsole.o:	vgaconsole.c
+	i686-elf-gcc -c vgaconsole.c -o vgaconsole.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+
 # link the bootstrap and kernel code into one elf file
-os.elf:	bootstrap.o kernel.o linker.ld
-	i686-elf-gcc -T linker.ld -o os.elf -ffreestanding -O2 -nostdlib bootstrap.o kernel.o -lgcc
+os.elf:	bootstrap.o kernel.o vgaconsole.o isr.o linker.ld
+	i686-elf-gcc -T linker.ld -o os.elf -ffreestanding -O2 -nostdlib bootstrap.o kernel.o vgaconsole.o isr.o -lgcc
 
 os.bin:	os.elf
 	objcopy -O binary os.elf os.bin
@@ -32,7 +38,9 @@ drive.bin: boot.bin os.bin
 	dd if=os.bin of=drive.bin bs=512 seek=1 conv=notrunc
 
 clean:	
-	rm boot.bin bootstrap.o kernel.o os.elf os.bin drive.bin
+	rm boot.bin bootstrap.o kernel.o isr.o vgaconsole.o
+	rm os.elf 
+	rm os.bin drive.bin
 	rm -rf drive.vdi
 
 vbox:

@@ -1,10 +1,19 @@
 #
 # 2015/03/23 bare bones from OSDev
+# 2015/03/31 converted to gas format and added GDT/IDT stuff
 #
 
-.code16
+.equ BOOTPARMS, 0x0500
+.equ BP_DRIVE,  BOOTPARMS+0
+.equ BP_GDTPTR, BOOTPARMS+4
+.equ BP_IDTPTR, BOOTPARMS+8
 
+.equ GDT_ADDR,  0x0600
+.equ IDT_ADDR,  0x0700
+
+.code16
 .extern  kernel_main
+# .extern  isr_default_handler
 
 # The linker script specifies _start as the entry point to the kernel and the
 # bootloader will jump to this position once the kernel has been loaded. 
@@ -12,45 +21,89 @@
     .global _start
 
 _start:
-
-
-# show that we have arrived with a double **
-    mov $0x2a,%al
-    call outch
-    mov $0x2a,%al
-    call outch
-
-# open the A20 gate 
-    # switch A20 gate via fast A20 port 92
-#    in $0x93,%al
-#    or $2,%al               # set A20 Gate bit 1
-#    and $1,%al              # clear INIT_NOW bit
-#    out %al, $0x92
-
-
-# enable protected mode    
-#    cli
+# set the data/extra segments to known value 0x0000
     mov $0,%ax
     mov %ax,%ds
-#    nop
-#    sgdt gdtsave
-#    nop
-    lgdt gdtptr 
-#    nop
-#    sgdt gdtsave
+    mov %ax,%es
+
+# show that we have arrived by printing a double star **
+    mov $0x2a,%al
+    call outch
+    mov $0x2a,%al
+    call outch
+
+# move the GDT to lower memory location
+    call gdtmove
+
+# open the A20 gateA
+#   code from freeBSD boot1.S
+seta20:
+    cli
+    xor %cx,%cx
+
+seta20.1:
+    dec %cx                 # Timeout?
+    jz seta20.3             # Yes
+    inb $0x64,%al           # Get status
+    testb $0x2,%al          # Busy?
+    jnz seta20.1            # Yes
+    movb $0xd1,%al          # Command: Write
+    outb %al,$0x64          #  output port
+seta20.2:
+   inb $0x64,%al           # Get status
+    testb $0x2,%al          # Busy?
+    jnz seta20.2            # Yes
+    movb $0xdf,%al          # Enable
+    outb %al,$0x60          #  A20
+seta20.3:
+    sti             # Enable interrupts
+
+
+# enable protected mode
+    lgdt (BP_GDTPTR) 
+    nop
+    sgdt gdtsave
     nop
 
     mov  %cr0,%eax
     or   $1,%ax
     mov  %eax,%cr0
-	ljmp $8,$init32		# To 32-bit code
+    ljmp $8,$init32     # To 32-bit code
     nop
 
-# *********************************************************************
-#  output character 
-#
+# *****************************************
+# relocate GDT table and pointer
+
+# copy GDT pointer to Boot Parm section
+gdtmove:
+    mov $gdtptr,%si
+    mov $BP_GDTPTR,%di
+    xor %ecx,%ecx
+    mov $6,%cx
+.gdtmove1:
+    lodsb
+    stosb
+    loop   .gdtmove1
+    nop
+
+# copy GDT table to GDT section
+    mov $gdt_start,%si
+    mov $GDT_ADDR,%di
+    xor %ecx,%ecx
+    mov (gdtptr),%cx
+.gdtmove2:
+    lodsb
+    stosb
+    loop   .gdtmove2
+    nop
+    ret
+
+
+# ***********************************************
+#  output character
+
 outch:
-    mov $0x0e,%ah     # write tty mode
+    mov $0x0e,%ah  # write tty mode
     mov $0,%bh     # not sure if we need this but set output page
     mov $7,%bl     # not sure if we need this but set char attribute=white
     int $0x10
@@ -70,29 +123,24 @@ init32:
     nop
                             # kernel code was loaded at address 0x008000
 
-    mov $0x9F000,%esp       # Stack begins filling at this address
+    mov $0x9ffff,%esp       # Top of Stack 
 
+# remap the IRQ's via the PIC and set up interrupt IDT table 
+#    call idtmove
+    call irq_remap
+    
 # call kernel_main in C code 
     call kernel_main
 
-
-
-#************************************
-# print byte on screen
 #
-# choutvid:
-#     push eax
-#     push ebx
-#     and ax, 0x0fff     ; background=black(bits 12-15=0) foreground=white(bit8-11=15)
-#     mov ebx, [video_pointer]
-#     mov [ebx], ax
-#     inc ebx
-#     mov [video_pointer], ebx
-#     pop ebx
-#     pop eax
-#     ret
+# ************************************
+# interrupt service request functions
+.include "isr.S"
 
-# .section .data
+#*********************************
+#*********************************
+#*********************************
+.section .data
 
 .p2align 4, 0xaa
 gdtsave:
@@ -116,10 +164,10 @@ gdt_start:
  CODE_DESC:
     .word 0xFFFF       # limit low
     .word 0            # base low
-   .byte 0            # base middle
-#   10011010b    # access
+    .byte 0            # base middle
+#   10011010b          # access
     .byte 0x9a
-#    11001111b    # granularity
+#    11001111b         # granularity
     .byte 0xcf
     .byte 0            # base high
 
@@ -127,9 +175,9 @@ gdt_start:
     .word 0xFFFF       # data descriptor
     .word 0            # limit low
     .byte 0            # base low
-#    .byte 10010010b    # access
+#    .byte 10010010b   # access
     .byte 0x92
-#    .byte 11001111b    # granularity
+#    .byte 11001111b   # granularity
     .byte 0xcf
     .byte 0            # base high
 gdt_end:
@@ -138,7 +186,4 @@ gdtptr:
     .word gdt_end-gdt_start         # length of GDT
     .word gdt_start
     .word 0x0
-
-
-
 

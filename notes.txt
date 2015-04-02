@@ -1,0 +1,119 @@
+
+OS Development 
+===============
+http://www.osdever.net/bkerndev/Docs/title.htm
+http://www.osdever.net/bkerndev/Docs/irqs.htm
+http://www.osdever.net/tutorials/
+
+GDB NOTES
+=========
+gdb -x gdb_init_file            --> start gdb and exec commands in file
+set disassembly-flavor intel    --> use intel assembler format 
+layout asm                      --> show window with assembler
+break -start                    --> break at start of code
+break *0x8000                   --> break at address
+info registers (i r)            --> show CPU registers
+print $register                 --> print specific register
+disassemble -start,+count       --> diss at 
+x/20i $eip                      --> disassemble 20 instruction
+x/20i $cs*16+$eip               --> disassemble 20 instruction
+x/20i 0x802a                    --> disassemble 20 instruction
+x/30b  0x092d                    --> examine 30 bytes 
+x/30x  0x092d                    --> examine 30 bytes 
+target remote localhost:1234    --> connect to running qemu emulation
+set arch i8086                  --> set disassemble for 16 bit (real mode)
+set arch i386                   --> set disassemble for 32bit (protected mode)
+define ..... end                --> define user command (short cuts)
+
+QEMU/KVM
+========
+kvm -hda program.bin                --> start from harddisk
+kvm -s -S -had program.bin          --> start "stop" and waiting for gdb 
+kvm -d cpu_reset -hda program.bin   --> CPU registers before each reset
+kvm -d in_asm -hda program.bin      --> show assemble code flow
+kvm -d ?                            --> see other debug options
+
+GIT 
+git push -u orgin master
+git status
+git commit -m "comment"
+git add
+git remote add https://lockettnb@github.com/lockettnb
+git log                              -->Lists version history 
+git config --global user.name "xxxx"
+git config --global user.email "xxxx"
+
+Create Raw Disk Image
+=====================
+dd if=/dev/zero of=disk.img bs=1024 count=1024
+mkfs.ext disk.img
+dd if=boot.bin of=disk.img
+mount -o loop disk.img /mnt/virtual
+
+Virtual Box Disk Swap
+=====================
+Generally I find this a royal pain and would recommend using qemu/kvm or another
+virtual system.
+
+Assuming the VM already has an attached hard disk.
+
+1) Remove the old disk file: 
+    >>rm -rf drive.vdi
+
+2) Convert the new binary disk file to VDI format
+    VBoxManage convertfromraw drive.bin drive.vdi --format VDI 
+
+3) Change the VM to have no disk file attached to the drive
+    >>VBoxManage storageattach boot --storagectl "IDE Controller" --port 0 --device 0 --type hdd --medium none
+
+4) Have to be in the VM's directory so VBoxManage can find the disk file.
+   We "close" it to remove it from VBox's registry 
+    >>cd /home/john/VirtualBox\ VMs/boot
+    >>VBoxManage closemedium disk /home/john/VirtualBox\ VMs/boot/drive.vdi
+
+5) Move the new disk file into the VM's directory and attach it to the hard drive
+    >>cp /home/john/src/pc_boot/boot5/drive.vdi /home/john/VirtualBox\ VMs/boot/drive.vdi
+    >>VBoxManage storageattach boot --storagectl "IDE Controller" --port 0 --device 0 --type hdd --medium drive.vdi
+
+Creating the Cross Compiler
+===========================
+Downloaded the source for gcc 4.9.2 and binutils 2.2.5
+    https://gnu.org/software/gcc/
+    https://gnu.org/software/binutils/
+
+Installed dependencies 
+-----------------------
+    libgmp3-dev
+    libmpfr-dev
+    libisl-dev
+    libcloog-isl-dev
+    libmpc-dev
+    texinfo
+
+Prepare environment
+-------------------
+    export PREFIX="$HOME/opt/cross"
+    export TARGET=i686-elf
+    export PATH="$PREFIX/bin:$PATH"
+ 
+Build binutils 
+---------------
+cd $HOME/src
+    mkdir build-binutils
+    cd build-binutils
+    ../binutils-x.y.z/configure --target=$TARGET --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror
+    make
+    make install
+
+Build GCC
+---------
+    cd $HOME/src
+    mkdir build-gcc
+    cd build-gcc
+    ../gcc-x.y.z/configure --target=$TARGET --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
+    make all-gcc
+    make all-target-libgcc
+    make install-gcc
+    make install-target-libgcc
+
+

@@ -4,12 +4,15 @@
 ;		-first test of a boot loader: startup, print a message, and quit
 ; 2015/05/17 added memory dump and jump to "hello world" kernel
 
-%define	BOOTSEG	0x07C0		; memory segment load address for the boot code
-%define	LOADSEG	0x0800		; memory segment load address for the kernel code
-%define drive 0x80          ; drive = harddisk
+%define	BOOTSEG     0x07C0		; memory segment load address for the boot code
+%define BOOT_ADDR   0x7c00
+%define	LOADSEG     0x0800		; memory segment load address for the kernel code
+%define LOAD_ADDR   0x8000
+%define BOOTPARMS   0x0500
+%define drive       BOOTPARMS+0  ; boot parm addr to save drive 
 
 [bits 16]
-[org 0x0000]
+[org 0x7c00]
 	jmp start
 
 ;*********************************
@@ -19,69 +22,51 @@ msg:	db 0x0D, 0x0A, "Loading......", 0x0D, 0x0A, 0x00
 
 start:
 	cli                 ; clear interrupts while setting up stack
+
 	mov ax, 0x9000		; init the stack to $9ffff (9000:ffff)
 	mov ss, ax
 	mov sp, 0x0100   
-	sti
 
-	mov ax, BOOTSEG 
-	mov ds,ax
+    mov ax,0             ; set data segment 
+    mov ds,ax
+
+    mov [drive],dl      ; save doot drive(0x00=floppy 0x80=HD)
+
 	mov si, msg
 	call print_str
 
 ; display memory at start of the boot code location
-    mov ax, BOOTSEG 
-    mov ds,ax
-    mov si,0      
+    mov si,BOOT_ADDR      
     call memdump
 
 ; display memory at start of the load buffer location
-    mov ax, LOADSEG      
-    mov ds,ax
-    mov si,0      
+    mov si,LOAD_ADDR   
     call memdump
 
 	call loadk	    	    ; load my kernel
 
-    mov ax, LOADSEG         ; kernel code loaded at $08000 (0800:0000) 
-    mov ds,ax
-    mov si,0      
+    mov si,LOAD_ADDR
     call memdump            ; dump memory to ensure things loaded correctly
 
-    mov ax,LOADSEG         
-    mov es,ax
-    mov ds,ax
     jmp LOADSEG:0x0000
-
-pause:
-; pause for key
-    mov ah, 0
-    int 0x16
-    ret
-    
 
 
 ; *********************************************************************
 ;  load kernel from disk 
 ;
 loadk:
-	push ds
-reset:
 	mov ax,0		    ; reset drive ah=0
-	mov dl,drive		; drive 
+	mov dl,[drive]		; drive 
 	int 0x13
 	jc  .readerr
 
-	pop ds
 
-	mov ax, LOADSEG		; load location (es:bx=0200:0000)
+	mov ax, LOADSEG		; load location (es:bx)
 	mov es, ax
 	mov bx,0
-    mov ax,0xaa
-    mov [es:bx],ax
 
 .read:
-	mov dl,drive		; drive=floppy
+	mov dl,[drive]		; drive=floppy
 	mov dh,0		    ; head=0
 ;	mov cl,2		    ; sector=2
 ;	mov ch,0		    ; cylinder=0
@@ -91,10 +76,14 @@ reset:
 	int 0x13
 	jc  .readerr
 	ret	
-.readerr:
-    mov al,0x21         ; error print ! 
+
+    mov al,0x21         ; error print 
     call outch
-    
+    mov al,0x21         ; error print !! and stop
+    call outch
+.readerr:
+    jmp .readerr
+ 
 
 
 ; *********************************************************************
@@ -120,17 +109,6 @@ mdumploop:
     call outch
     ret
 
-
-; *********************************************************************
-;  output character 
-;
-outch:
-	mov ah,0x0E		; write tty mode
-	mov bh,0x00		; not sure if we need this but set output page
-	mov bl,0x07		; not sure if we need this but set char attribute=white
-	int 0x10
-	ret
-
 ; *********************************************************************
 ;  print NULL terminated string
 ;
@@ -143,8 +121,9 @@ msgloop:
     jmp msgloop
 .done:
 	ret
+
 ; *********************************************************************
-;  print byte 
+;  print byte in hex
 ;   -print byte in ax register
 ;
 print_byte:
@@ -156,7 +135,7 @@ print_byte:
     ret
 
 ; *********************************************************************
-;  print nibble 
+;  print nibble in hex 
 ;       -print lower nibble in ax register
 ;
 print_nibble:
@@ -168,6 +147,26 @@ add30:
         add al,0x30
         call outch
         ret
+
+
+; *********************************************************************
+;  output character 
+;
+outch:
+	mov ah,0x0E		; write tty mode
+	mov bh,0x00		; not sure if we need this but set output page
+	mov bl,0x07		; not sure if we need this but set char attribute=white
+	int 0x10
+	ret
+
+; *********************************************************************
+; not used any more 
+pause:
+; pause for key
+    mov ah,0
+    int 0x16
+    ret
+    
 
 
 ; this fancy magic puts the boot record signature in the last two bytes
