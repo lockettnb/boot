@@ -71,7 +71,7 @@ loadk:
 ;	mov cl,2		    ; sector=2
 ;	mov ch,0		    ; cylinder=0
     mov cx,0x0002
-	mov al,4		    ; kernal code sectors
+	mov al,12		    ; kernal code sectors
 	mov ah,2		    ; read sector 
 	int 0x13
 	jc  .readerr

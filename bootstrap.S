@@ -7,6 +7,8 @@
 .equ BP_DRIVE,  BOOTPARMS+0
 .equ BP_GDTPTR, BOOTPARMS+4
 .equ BP_IDTPTR, BOOTPARMS+8
+.equ BP_ISR,    BOOTPARMS+12 
+.equ BP_IRQ,    BOOTPARMS+16
 
 .equ GDT_ADDR,  0x0600
 .equ IDT_ADDR,  0x0700
@@ -33,7 +35,8 @@ _start:
     call outch
 
 # move the GDT to lower memory location
-    call gdtmove
+# decided to leave the GDT inside the kernel data memory
+#    call gdtmove
 
 # open the A20 gateA
 #   code from freeBSD boot1.S
@@ -56,13 +59,11 @@ seta20.2:
     movb $0xdf,%al          # Enable
     outb %al,$0x60          #  A20
 seta20.3:
-    sti             # Enable interrupts
-
 
 # enable protected mode
-    lgdt (BP_GDTPTR) 
-    nop
-    sgdt gdtsave
+#     lgdt (BP_GDTPTR) 
+    lgdt gdtptr
+    sgdt gdtsave      # used in debugging to see if the load worked
     nop
 
     mov  %cr0,%eax
@@ -75,28 +76,28 @@ seta20.3:
 # relocate GDT table and pointer
 
 # copy GDT pointer to Boot Parm section
-gdtmove:
-    mov $gdtptr,%si
-    mov $BP_GDTPTR,%di
-    xor %ecx,%ecx
-    mov $6,%cx
-.gdtmove1:
-    lodsb
-    stosb
-    loop   .gdtmove1
-    nop
-
+# gdtmove:
+#     mov $gdtptr,%si
+#     mov $BP_GDTPTR,%di
+#     xor %ecx,%ecx
+#     mov $6,%cx
+# .gdtmove1:
+#     lodsb
+#     stosb
+#     loop   .gdtmove1
+#     nop
+# 
 # copy GDT table to GDT section
-    mov $gdt_start,%si
-    mov $GDT_ADDR,%di
-    xor %ecx,%ecx
-    mov (gdtptr),%cx
-.gdtmove2:
-    lodsb
-    stosb
-    loop   .gdtmove2
-    nop
-    ret
+#     mov $gdt_start,%si
+#     mov $GDT_ADDR,%di
+#     xor %ecx,%ecx
+#     mov (gdtptr),%cx
+# .gdtmove2:
+#     lodsb
+#     stosb
+#     loop   .gdtmove2
+#     nop
+#     ret
 
 
 # ***********************************************
@@ -123,7 +124,7 @@ init32:
     nop
                             # kernel code was loaded at address 0x008000
 
-    mov $0x9ffff,%esp       # Top of Stack 
+    mov $0xa0000,%esp       # Top of Stack 
 
 # remap the IRQ's via the PIC and set up interrupt IDT table 
 #    call idtmove
@@ -145,9 +146,6 @@ init32:
 .p2align 4, 0xaa
 gdtsave:
     .long 0x12345678               # current location in video screen
-
-video_pointer:
-    .long 0xb8000               # current location in video screen
 
 #*********************************
 #* Global Descriptor Table (GDT) *

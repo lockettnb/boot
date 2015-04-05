@@ -26,3 +26,5 @@ enum vga_color
 void vga_init(void);
 void vga_writestring(const char* data);
 void vga_writenumber(int n);
+void vga_goto(int x, int y);
+

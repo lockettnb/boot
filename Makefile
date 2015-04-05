@@ -2,6 +2,7 @@
 # 2015/03/20 created
 # 2015/03/25 convert script to makefile
 
+FLAGS=-c -g -O0 
 
 all:	drive.bin
 
@@ -11,21 +12,22 @@ boot.bin:	boot.S
 
 # assembly the kernel bootstrap code into elf format
 bootstrap.o:	bootstrap.S isr.S
-	i686-elf-gcc -c  bootstrap.S  -o bootstrap.o
+	i686-elf-gcc ${FLAGS} bootstrap.S  -o bootstrap.o
 
 # compile the C kernel code into elf format
 kernel.o:	kernel.c
-	i686-elf-gcc -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	i686-elf-gcc ${FLAGS} kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
 
 isr.o:	isr.c
-	i686-elf-gcc -c isr.c -o isr.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	i686-elf-gcc ${FLAGS} isr.c -o isr.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
 
 vgaconsole.o:	vgaconsole.c
-	i686-elf-gcc -c vgaconsole.c -o vgaconsole.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	i686-elf-gcc ${FLAGS} vgaconsole.c -o vgaconsole.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
 
 # link the bootstrap and kernel code into one elf file
 os.elf:	bootstrap.o kernel.o vgaconsole.o isr.o linker.ld
-	i686-elf-gcc -T linker.ld -o os.elf -ffreestanding -O2 -nostdlib bootstrap.o kernel.o vgaconsole.o isr.o -lgcc
+	i686-elf-gcc -T linker.ld -o os.elf -ffreestanding -fno-asynchronous-unwind-tables -O2 -nostdlib bootstrap.o kernel.o vgaconsole.o isr.o -lgcc
+
 
 os.bin:	os.elf
 	objcopy -O binary os.elf os.bin

@@ -77,15 +77,21 @@ void vga_putentryat(char c, uint8_t color, size_t x, size_t y)
  
 void vga_putchar(char c)
 {
-	vga_putentryat(c, vga_color, vga_column, vga_row);
-	if ( ++vga_column == VGA_WIDTH )
-	{
-		vga_column = 0;
-		if ( ++vga_row == VGA_HEIGHT )
-		{
-			vga_row = 0;
-		}
-	}
+    if(c == '\n') {
+        vga_column=0;
+        if ( ++vga_row == VGA_HEIGHT ) {
+            vga_init();
+        } 
+    }
+    else {
+        vga_putentryat(c, vga_color, vga_column, vga_row);
+        if ( ++vga_column == VGA_WIDTH ) {
+            vga_column = 0;
+            if ( ++vga_row == VGA_HEIGHT ) {
+                vga_row = 0;
+            }
+        }
+    }
 }
  
 void vga_writestring(const char* data)
@@ -99,14 +105,14 @@ void vga_writenumber(int n)
 {
 unsigned char nl;
 unsigned char nh;
-    nl = n && 0x000f;
-    nh = n && 0x00f0;
-    if (nl > 9)
+    nl = n & 0x000f;
+    nh = (n & 0x00f0)>>4;
+    if (nl <= 9)
         nl=nl+48;
     else
         nl=nl+55;
 
-    if (nh > 9)
+    if (nh <= 9)
         nh=nh+48;
     else
         nh=nh+55;
@@ -117,3 +123,9 @@ unsigned char nh;
     vga_putchar(nl);    // low byte
 
 } 
+
+void vga_goto(int x, int y)
+{
+    vga_row = x;
+    vga_column = y;
+}
